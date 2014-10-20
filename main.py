@@ -42,30 +42,38 @@ class MainHandler(webapp2.RequestHandler):
     def get(self):
         self.set_default_headers()
 
-        barcode = self.request.params.get("q", None)
-        if barcode:
-            url = "http://api.goodguide.com/2.0/entities/%s.json?" \
-                  "api_key=%s&id_type=upc" % (barcode, API_KEY)
-            request = urllib2.Request(url, None, {'Referrer': 'http://shoppistant.com'})
-            response = urllib2.urlopen(request)
-            j = json.load(response)
-            url = j["url"]
-
-            open_details = self.request.params.get("d", None)
-            if open_details:
-                self.redirect(str(url))
-            else:
+        try:
+            barcode = self.request.params.get("q", None)
+            if barcode:
+                url = "http://api.goodguide.com/2.0/entities/%s.json?" \
+                      "api_key=%s&id_type=upc" % (barcode, API_KEY)
                 request = urllib2.Request(url, None, {'Referrer': 'http://shoppistant.com'})
                 response = urllib2.urlopen(request)
-                m = re.search(",\"Overall\":(.*),\"Environment", response.read())
-                if m:
-                    self.send_rating_image(m.group(1))
+                j = json.load(response)
+                url = j["url"]
+
+                open_details = self.request.params.get("d", None)
+                if open_details:
+                    self.redirect(str(url))
                 else:
-                    self.response.write("Not found")
-                    self.response.status = 404
-        else:
-            self.response.content_type = "application/json"
-            self.response.write(json.dumps(PLUGIN_INFO))
+                    request = urllib2.Request(url, None, {'Referrer': 'http://shoppistant.com'})
+                    response = urllib2.urlopen(request)
+                    m = re.search(",\"Overall\":(.*),\"Environment", response.read())
+                    if m:
+                        self.send_rating_image(m.group(1))
+                    else:
+                        self.response.write("Not found")
+                        self.response.status = 404
+            else:
+                self.response.content_type = "application/json"
+                self.response.write(json.dumps(PLUGIN_INFO))
+        except urllib2.HTTPError, e:
+            if e.code == 404:
+                self.response.write("Not found")
+                self.response.status = 404
+            else:
+                raise e
+
 
     def set_default_headers(self):
         # allow CORS
@@ -73,6 +81,7 @@ class MainHandler(webapp2.RequestHandler):
         self.response.headers["Expires"] = get_expiration_stamp(EXPIRATION_IN_SECONDS)
         self.response.headers["Content-Type"] = "application/json"
         self.response.headers["Cache-Control"] = "public, max-age=%d" % EXPIRATION_IN_SECONDS
+
 
     def send_rating_image(self, rating):
         img = Image.open("rating_background.png")
